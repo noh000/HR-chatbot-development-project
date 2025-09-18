@@ -1,0 +1,10 @@
+{
+  "graphs": {
+    "router1": "./router1_test.py:graph"
+  },
+  "env": "./.env",
+  "python_version": "3.13",
+  "dependencies": [
+    "."
+  ]
+}
