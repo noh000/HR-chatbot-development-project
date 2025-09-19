@@ -58,13 +58,6 @@ def router1_node(state: Router1State) -> Router1State:
         """
         response = llm.invoke(prompt).content
 
-        if "work" in response: is_hr = "work"
-        elif "leave" in response: is_hr = "leave"
-        elif "equipment" in response: is_hr = "equipment"
-        elif "welfare" in response: is_hr = "welfare"
-        elif "etc" in response: is_hr = "etc"
-        else: is_hr = "none"
-
     next_step = "rag" if is_hr != "none" else "reject"
 
     return {**state, "is_hr_question": is_hr, "next_step": next_step}
