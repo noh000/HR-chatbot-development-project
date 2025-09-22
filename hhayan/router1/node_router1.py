@@ -15,7 +15,7 @@ def hr_node(state: State) -> State:
       "next_step": "router2" | "reject"
     }}
 
-    질문: "{state['good_question']}"
+    질문: "{state['question']}"
     """
 
     # LLM 응답(json형태)의 안전성을 보장
