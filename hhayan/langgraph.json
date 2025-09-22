@@ -1,8 +1,8 @@
 {
   "graphs": {
-    "graph": "./router1_test_2.py:graph"
+    "graph": "./router1_test_3.py:graph"
   },
-  "env": "./.env",
+  "env": "../.env",
   "python_version": "3.13",
   "dependencies": [
     "."
