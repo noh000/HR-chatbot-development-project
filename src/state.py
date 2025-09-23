@@ -12,7 +12,6 @@ class State(MessagesState, total=False):
 
     # === 1차 라우터: HR 관련 질문 판단 ===
     is_hr_question: bool                        # True: HR 관련, False: 비관련 질문
-    next_step: Literal["router2", "reject"]     # 다음 노드 방향
     
     # === 2차 라우터: 답변 방식 결정 ===
     is_rag_suitable: bool                       # True: RAG 검색 가능, False: 담당자 연결 필요
@@ -24,12 +23,12 @@ class State(MessagesState, total=False):
     retrieved_docs: List[Document]              # 벡터DB에서 검색된 관련 문서들 (Top-K)
         
     # === 최종 답변 통합 관리 ===
-    # answer_type: Literal[                       # 답변 유형 구분
-    #     "pending",                              # 1차 라우터 True
-    #     "reject",                               # 1차 라우터 False
-    #     "rag_answer",                           # 2차 라우터 True
-    #     "department_contact"                    # 2차 라우터 False
-    # ]
+    answer_type: Literal[                       # 답변 유형 구분
+        "pending",                              # 1차 라우터 True
+        "reject",                               # 1차 라우터 False
+        "rag_answer",                           # 2차 라우터 True
+        "department_contact"                    # 2차 라우터 False
+    ]
     final_answer: str                           # 사용자에게 제공할 최종 답변 (모든 유형 통합)
     
     # === 처리 상태 추적 ===
