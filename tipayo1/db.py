@@ -1,10 +1,12 @@
 # db.py
+
 from dotenv import load_dotenv
 import os
 import logging
 import threading
 import time
 from typing import Tuple, List
+
 from pinecone import Pinecone, ServerlessSpec
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import TextLoader
@@ -22,7 +24,8 @@ _VSTORE_LOCK = threading.Lock()
 def _pc() -> Pinecone:
     api_key = os.getenv("PINECONE_API_KEY")
     if not api_key:
-        logging.warning("PINECONE_API_KEY가 설정되지 않았습니다. Pinecone 호출이 실패할 수 있습니다.")
+        # 즉시 실패: API 키 누락 시 명확한 예외 발생
+        raise RuntimeError("PINECONE_API_KEY 미설정: Pinecone 초기화를 진행할 수 없습니다.")
     return Pinecone(api_key=api_key)
 
 def _index_exists(pc: Pinecone, name: str) -> bool:
@@ -43,15 +46,18 @@ def _index_exists(pc: Pinecone, name: str) -> bool:
 def _ensure_index(pc: Pinecone, name: str, dimension: int) -> None:
     if _index_exists(pc, name):
         return
+
     cloud = os.getenv("PINECONE_CLOUD", "aws")
     region = os.getenv("PINECONE_REGION", "us-east-1")
+
     pc.create_index(
         name=name,
         dimension=dimension,
         metric="cosine",
         spec=ServerlessSpec(cloud=cloud, region=region),
     )
-    # 인덱스 준비 대기
+
+    # 인덱스 준비 완료까지 대기
     for _ in range(30):
         try:
             desc = pc.describe_index(name)
@@ -61,6 +67,7 @@ def _ensure_index(pc: Pinecone, name: str, dimension: int) -> None:
         except Exception:
             pass
         time.sleep(2)
+
     logging.info(f"Pinecone 인덱스 준비: {name}")
 
 def _load_and_split(file_path: str) -> List[Document]:
@@ -84,12 +91,14 @@ def get_vectorstore(
     - 결과는 (index_name, abs(file_path)) 키로 캐시
     """
     key: Tuple[str, str] = (index_name, os.path.abspath(file_path))
+
     with _VSTORE_LOCK:
         if key in _VSTORE_CACHE:
             return _VSTORE_CACHE[key]
 
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    dimension = 1536  # text-embedding-3-small
+    dimension = 1536  # text-embedding-3-small 기준 차원
+
     pc = _pc()
     _ensure_index(pc, index_name, dimension)
 
