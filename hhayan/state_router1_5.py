@@ -15,14 +15,15 @@ class State(MessagesState, total=False):
     answer_type: Literal["pending", "reject"]
 
 # =========================
-# 2. HR Router (라우터 역할만 수행)
+# 2. HR Router (라우터 역할)
 # =========================
 class HRAnalysis(TypedDict):
     is_hr_question: bool
 
 def hr_router(state: State) -> str:
     """
-    HR 여부 판별 후 다음 노드 경로만 반환
+    HR 여부만 LLM으로 판별합니다.
+    판별 결과를 state에 기록하고, 라우팅 방향("router2" or "reject")은 Python에서 반환합니다.
     """
     prompt = f"""
     당신은 "가이다 플레이 스튜디오(GPS)"의 HR 정책 안내 챗봇입니다.
@@ -34,14 +35,12 @@ def hr_router(state: State) -> str:
     structured_llm = llm.with_structured_output(HRAnalysis)
     result: HRAnalysis = structured_llm.invoke(prompt) # dict 형태: {"is_hr_question": True or false}
 
-    is_hr = result["is_hr_question"] # 반환값: true or false
-
     # state 업데이트
-    state["is_hr_question"] = is_hr # 반환값: {"is_hr_question": True}
-    state["answer_type"] = "pending" if is_hr else "reject"
+    state["is_hr_question"] = result["is_hr_question"]
+    state["answer_type"] = "pending" if result["is_hr_question"] else "reject"
 
     # 라우팅 방향만 반환
-    return "router2" if is_hr else "reject" # ture -> router2 / false -> reject
+    return "router2" if result["is_hr_question"] else "reject" # ture -> router2 / false -> reject
 
 # =========================
 # 3. Reject Node
