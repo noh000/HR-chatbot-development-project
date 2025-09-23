@@ -137,3 +137,25 @@ def verify_answer(state: State) -> dict:
     verdict = llm.invoke(prompt).content.strip()
     verdict = "일치함" if verdict.startswith("일치") else ("불일치함" if verdict.startswith("불일치") else "불일치함")
     return {"verification": verdict}
+
+# 6) 담당자 안내 답변 생성
+def department_node(state: State) -> dict:
+    """
+    담당자 안내 응답 생성
+    """
+    department = state.get('department_info') 
+
+    if not department:
+        # 기본값: 인사팀
+        department = {"name": "인사", "email": "hr@gaida.play.com", "slack": "#ask-hr"}
+    
+    response = f"""
+해당 문의사항은 **{department['name']}팀**으로 문의하시면 정확하고 빠른 답변을 받으실 수 있습니다.
+
+📧 **이메일**: {department['email']}
+💬 **슬랙**: {department['slack']}
+
+추가 질문이 있으시면 언제든 말씀해 주세요! 😊
+    """.strip()
+    
+    return {"final_answer": response}
