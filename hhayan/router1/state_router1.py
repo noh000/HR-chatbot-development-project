@@ -1,9 +1,9 @@
 # router1 state
 
 # =========================
-# 1. State
+# 1. State 정의
 # =========================
 class State(MessagesState, total=False):
-    is_hr_question: Literal["yes", "no"]   # HR 여부
+    refined_question: str                   # LLM이 정제한 질문 (문맥 보완, 맞춤법 교정 등)
+    is_hr_question: bool                    # HR 여부 (true, false)
     next_step: Literal["router2", "reject"] # 다음 노드 방향
-    answer: str                        # 최종 답변 (추가됨)

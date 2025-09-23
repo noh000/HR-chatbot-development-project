@@ -1,44 +1,41 @@
 # router1 node: HR NODE + REJECT NODE
 
 # =========================
-# 2. HR NODE
+# 2. HR Node 
 # =========================
+
+# json형식 확정용
+class HRAnalysis(TypedDict):
+    """HR 여부 판별 결과"""
+    is_hr_question: bool                  # True → HR 관련, False → HR 아님
+    next_step: str                        # "router2" | "reject"
+
 def hr_node(state: State) -> State:
     """HR 관련 질문인지 판별하는 노드"""
     prompt = f"""
     당신은 "가이다 플레이 스튜디오(GPS)"의 HR 정책 안내 챗봇입니다.  
-    당신은 회사 내부 직원의 질문이 HR(인사/근무/휴가/복지/장비·보안/출장·비용처리 등)과 관련된 질문인지 아닌지를 판별하는 것입니다.  
-    
-    ### 출력 형식 (반드시 JSON):
-    {{
-      "is_hr_question": "yes" | "no",
-      "next_step": "router2" | "reject"
-    }}
+    회사 내부 직원의 질문이 HR(인사/근무/휴가/복지/장비·보안/출장·비용처리 등)과 관련된지 판별하세요.  
 
-    질문: "{state['question']}"
+    질문: "{state['refined_question']}"
     """
 
-    # LLM 응답(json형태)의 안전성을 보장
-    response = llm.invoke(prompt).content.strip()
+    structured_llm = llm.with_structured_output(HRAnalysis)
 
     try:
-        parsed = json.loads(response)
-    except json.JSONDecodeError:
-        # LLM이 JSON을 못 주면 기본값으로 fallback
-        parsed = {"is_hr_question": "no", "next_step": "reject"}
+        result: HRAnalysis = structured_llm.invoke(prompt)
+    except Exception:
+        # fallback: HR 아님 처리
+        return {**state, "is_hr_question": False, "next_step": "reject"}
 
     return {
         **state,
-        "is_hr_question": parsed.get("is_hr_question", "no"),
-        "next_step": parsed.get("next_step", "reject"),
+        "is_hr_question": result["is_hr_question"],
+        "next_step": result["next_step"],
     }
 
 # =========================
-# 4. Reject Node
+# 5. Reject Node
 # =========================
-def reject_node(state: State) -> State:
-    """HR 관련이 아닌 질문에 대한 거부 메시지"""
-    return {
-        **state,
-        "answer": "지원하지 않는 질문입니다. HR 관련 문의만 가능합니다."
-    }
+def reject_node(state: State):
+    """HR 관련이 아닌 질문에 대한 거부 메시지 후 종료"""
+    return "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."
