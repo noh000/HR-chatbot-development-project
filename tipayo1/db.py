@@ -1,6 +1,7 @@
 # db.py
-
 from dotenv import load_dotenv
+load_dotenv()
+
 import os
 import logging
 import threading
@@ -10,21 +11,18 @@ from typing import Tuple, List
 from pinecone import Pinecone, ServerlessSpec
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.document_loaders import TextLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_pinecone import PineconeVectorStore
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_core.documents import Document
 
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
-
-_VSTORE_CACHE = {}
+_VSTORE_CACHE: dict[Tuple[str, str], PineconeVectorStore] = {}
 _VSTORE_LOCK = threading.Lock()
 
 def _pc() -> Pinecone:
     api_key = os.getenv("PINECONE_API_KEY")
     if not api_key:
-        # 즉시 실패: API 키 누락 시 명확한 예외 발생
         raise RuntimeError("PINECONE_API_KEY 미설정: Pinecone 초기화를 진행할 수 없습니다.")
     return Pinecone(api_key=api_key)
 
@@ -46,17 +44,14 @@ def _index_exists(pc: Pinecone, name: str) -> bool:
 def _ensure_index(pc: Pinecone, name: str, dimension: int) -> None:
     if _index_exists(pc, name):
         return
-
     cloud = os.getenv("PINECONE_CLOUD", "aws")
     region = os.getenv("PINECONE_REGION", "us-east-1")
-
     pc.create_index(
         name=name,
         dimension=dimension,
         metric="cosine",
         spec=ServerlessSpec(cloud=cloud, region=region),
     )
-
     # 인덱스 준비 완료까지 대기
     for _ in range(30):
         try:
@@ -67,17 +62,33 @@ def _ensure_index(pc: Pinecone, name: str, dimension: int) -> None:
         except Exception:
             pass
         time.sleep(2)
-
     logging.info(f"Pinecone 인덱스 준비: {name}")
 
 def _load_and_split(file_path: str) -> List[Document]:
+    """
+    HR 정책 문서를 TextLoader + MarkdownHeaderTextSplitter로 로드하는 함수
+    """
     loader = TextLoader(file_path, encoding="utf-8")
-    docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    split_docs = splitter.split_documents(docs)
-    base = os.path.basename(file_path)
-    for i, d in enumerate(split_docs):
-        d.metadata["source"] = f"{base}#chunk-{i}"
+    documents = loader.load()
+    document_text = documents[0].page_content if documents else ""
+
+    headers_to_split_on = [
+        ("#", "문서제목"),
+        ("##", "정책대분류"),
+        ("###", "정책세부항목"),
+    ]
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on,
+        strip_headers=False,
+    )
+    md_header_splits = markdown_splitter.split_text(document_text)
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""],
+    )
+    split_docs = text_splitter.split_documents(md_header_splits)
     return split_docs
 
 def get_vectorstore(
@@ -91,13 +102,12 @@ def get_vectorstore(
     - 결과는 (index_name, abs(file_path)) 키로 캐시
     """
     key: Tuple[str, str] = (index_name, os.path.abspath(file_path))
-
     with _VSTORE_LOCK:
         if key in _VSTORE_CACHE:
             return _VSTORE_CACHE[key]
 
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    dimension = 1536  # text-embedding-3-small 기준 차원
+    dimension = 1536  # text-embedding-3-small 차원
 
     pc = _pc()
     _ensure_index(pc, index_name, dimension)
