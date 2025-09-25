@@ -40,22 +40,37 @@ def analyze_query(state: State) -> dict:
     question = _get_question(state)
 
     prompt = f"""
-    역할: 검색 쿼리 엔지니어
-    다음 사용자의 복지 관련 질문을 가이다 플레이 스튜디오 복지정책 문서(04_복지정책_v1.0.md) 검색에 최적화된 한 줄 쿼리로 변환하라.
-    한국어 공식 정책 용어만 사용하고, 숫자는 아라비아 숫자로 표준화하라.
-    섹션은 선두에 두고, 핵심 키워드는 콤마(,)로 구분하라.
-    동의어/관련어는 | 로 확장하되 2~4개로 제한하고, 불필요한 설명은 절대 출력하지 마라.
-    수치(일수, 금액)와 조건(예: 출근율 80%, 진단서 제출, 사용 기한 등)이 질문에 있으면 포함하라.
-    섹션 후보(문서 용어): 연차휴가, 병가, 가족돌봄휴가, 복지포인트, 교육비 지원, 장비 지원, 건강검진, 카페/스낵바, 동아리 활동, 임신·출산·육아
-    용어 표준화 예: “언제까지 사용”→“연차 사용 기한”, 월차→월차휴가, 복지포인트→포인트, 교육비→교육비 지원
-    출력 형식(한 줄, 라벨/따옴표/불릿 금지, 마침표 금지):
-    섹션, 키워드1|동의어1|동의어2, 키워드2, 수치/조건...
-    예시(출력 예, 실제 출력에 포함하지 말 것):
-    연차휴가, 연차 사용 기한|미사용 연차 소멸, 발생연차 기준, 출근율 80%
-    복지포인트, 포인트 금액|포인트, 사용 기한, 연간 한도 50만
+    당신은 "가이다 플레이 스튜디오(GPS)" HR 챗봇의 전처리 노드입니다.
+    사용자의 질문을 정제해 주세요.
+    규칙:
+    1. 언어 규칙
+     - 기본 언어는 한국어여야 합니다.
+     - 한국어 문맥 안에 숫자나 일부 영어 단어(point, vacation 등)가 섞여 있는 경우는 허용합니다.
+     - 한국어 없이 전부 영어로만 입력된 경우는 "invalid_input"으로 분류합니다.
+    2. 형식 정리
+     - 불필요한 특수문자는 제거합니다.
+     - 문장의 의미를 전달하는 기본 문장부호(?, !, ., ,)는 보존합니다.
+     - 여러 개의 공백은 하나의 공백으로 줄입니다.
+    3. 표현 표준화
+    문맥을 파악하여 HR 용어를 표준화합니다.
+    표준화 예시:
+        - "쉬려고 하는데 하루에 반만" → "반차 안내"
+        - "컴퓨터 로그인이 안 돼" → "계정 보안 문제"
+        - "회사 동호회 돈 지원해줘?" → "사내 동호회 지원"
+        - "출근 좀 늦게 해도 돼?" → "시차 출근 제도"
+        - "급여일이 언제야?" → "급여일 안내"
+        - "복지 point 얼마지? 1000포인트인가?" → "복지 포인트 안내"
+        - "나 반          차 쓸 수 있어?" → "반차 안내"
+        동의어, 유의어, 줄임말, 초성 표현도 표준화 합니다.
+        예시:
+        - "대휴" → "대체휴가"
+        - "ㄱㄱ" → "고고"
+        - "ㅇㅇ" → "응응"
+        - "내규" → "내부규칙"
+
     사용자 질문:
-    {question}
-    위 형식으로 최종 한 줄 쿼리만 출력하라.
+        {question}
+    위 규칙으로 불필요한 내용은 제거하고 출력하라.
     """.strip()
 
     result = llm.invoke(prompt).content.strip() if question else ""
@@ -63,11 +78,19 @@ def analyze_query(state: State) -> dict:
 
 # 2) 문서 검색
 def retrieve(state: State) -> dict:
-    vs = get_vectorstore(index_name="gaida-company-rules", file_path="04_복지정책_v1.0.md")
+    # 미리 생성된 Pinecone 인덱스에 연결하여 retriever를 생성합니다.
+    # db.py의 get_vectorstore 함수를 사용하여 기존 인덱스를 가져옵니다.
+    vs = get_vectorstore(index_name="gaida-hr-rules")
+    
     refined_question = state.get("refined_question", "") or _get_question(state) or ""
     if not refined_question:
+        # 질문이 없으면 빈 리스트를 반환합니다.
         return {"retrieved_docs": []}
-    docs = vs.similarity_search(refined_question, k=5)
+        
+    # retriever를 사용하여 유사도 높은 문서를 3개 검색합니다.
+    retriever = vs.as_retriever(search_kwargs={"k": 3})
+    docs = retriever.invoke(refined_question)
+    
     return {"retrieved_docs": docs}
 
 # 3) 재순위화(정규식 기반 파싱 유지)
