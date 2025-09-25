@@ -34,7 +34,7 @@ def _get_question(state: State) -> str:
 
     return ""
 
-# 1) 검색 쿼리 정제
+# 1) 사용자 질문 정제
 def analyze_query(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
@@ -46,7 +46,6 @@ def analyze_query(state: State) -> dict:
     1. 언어 규칙
      - 기본 언어는 한국어여야 합니다.
      - 한국어 문맥 안에 숫자나 일부 영어 단어(point, vacation 등)가 섞여 있는 경우는 허용합니다.
-     - 한국어 없이 전부 영어로만 입력된 경우는 "invalid_input"으로 분류합니다.
     2. 형식 정리
      - 불필요한 특수문자는 제거합니다.
      - 문장의 의미를 전달하는 기본 문장부호(?, !, ., ,)는 보존합니다.
@@ -66,15 +65,17 @@ def analyze_query(state: State) -> dict:
         - "대휴" → "대체휴가"
         - "ㄱㄱ" → "고고"
         - "ㅇㅇ" → "응응"
-        - "내규" → "내부규칙"
+    4. 금지 규칙
+     - 개인 HR 데이터 (예: "내 급여", "내 퇴직금")
+     - 개인정보 (예: 주민등록번호, 사원번호, 이름)
+     - 회사 내부 보안 내용 (예: 회사 재정 상황, 신규 프로젝트, 회사의 중요한 내부 문건)
+     - 복잡한 급여·퇴직금 계산 요청
+     - 법률 자문 요청이나 법률 상담 톤의 질문
+     - 기타 민감한 주제
 
-    사용자 질문:
-        {question}
+    사용자 질문: {question}
     위 규칙으로 불필요한 내용은 제거하고 출력하라.
     """.strip()
-
-    result = llm.invoke(prompt).content.strip() if question else ""
-    return {"refined_question": result}
 
 # 2) 문서 검색
 def retrieve(state: State) -> dict:

@@ -4,6 +4,9 @@
 # 1. State 정의
 # =========================
 class State(MessagesState, total=False):
-    refined_question: str                   # LLM이 정제한 질문 (문맥 보완, 맞춤법 교정 등)
-    is_hr_question: bool                    # HR 여부 (true, false)
-    next_step: Literal["router2", "reject"] # 다음 노드 방향
+    refined_question: str
+    is_hr_question: bool
+    answer_type: Literal[
+        "pending",   # 1차 라우터 통과 (HR 관련 질문 → router2로 진행)
+        "reject"     # 1차 라우터에서 걸러짐 (HR 무관 질문)
+    ]
