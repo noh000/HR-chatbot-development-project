@@ -78,12 +78,18 @@ def reject_node(state: State):
 # =========================
 # 2차 라우터: RAG vs Department
 # =========================
+class RAGDepartmentAnalysis(TypedDict, total=False):
+    route: str  # "rag" 또는 "department"
+    department: str  # department인 경우에만 값이 있음
+
 def _classify_rag_or_department(question: str) -> Dict[str, str]:
     """LLM을 사용한 통합 분류: RAG vs 담당자 안내 + 부서 결정"""
     llm = get_llm("router")
-    system_prompt = """
+    system_prompt = f"""
     당신은 사내(gaida play studio) HR 챗봇의 질문 분류 전문가입니다.
-    사용자의 질문을 분석하여 어떻게 처리할지 결정해주세요.
+    정제된 질문을 분석하여 어떻게 처리할지 결정해주세요.
+
+    정제된 질문: "{question}"
 
     # 분류 기준
 
@@ -109,52 +115,29 @@ def _classify_rag_or_department(question: str) -> Dict[str, str]:
     - **총무**: 사무실, 비품, 물품, 구매, 수령, 우편, 사무용품, 시설, 행사, 차량, 청소, 자산, 출장, 숙박, 교통
     - **인프라**: 서버, 네트워크, 컴퓨터, IT, 소프트웨어, 장비, 시스템, 접속, VPN, 계정, 접근
     - **보안**: 보안, 해킹, 정보, 유출, 침해, 랜섬웨어, 백신, 데이터, 비밀번호, 방화벽, 악성코드, 암호
-    - **인사**: 개별 급여 문의, 채용, 인사평가, 퇴직, 입사, 퇴사, 평가, 승진, 개인적 근무 상담
+    - **인사**: 개별 급여 문의, 채용, 인사평가, 퇴직, 퇴직금 계산 및 지급, 입사, 퇴사, 평가, 승진, 개인적 근무 상담
 
     # 응답 형식
     다음 JSON 형식으로만 응답해주세요:
 
     RAG 처리인 경우:
-    {"route": "rag"}
+    {{"route": "rag"}}
 
     담당자 안내인 경우:
-    {"route": "department", "department": "부서명"}
+    {{"route": "department", "department": "부서명"}}
 
     부서명은 반드시 다음 중 하나여야 합니다: 재무, 총무, 인프라, 보안, 인사
 
     부득이하게 재무, 총무, 인프라, 보안 부서에 해당하지 않을 경우에는 인사로 지정해주세요.
-            """
-            
-    user_prompt = f"""
-    사용자 질문: "{question}"
+    """
 
-    위 질문을 분석하여 RAG 처리할지, 담당자 안내할지 결정하고 JSON 형식으로 응답해주세요.
-            """
-
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt)
-    ]
+    _llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
+    structured_llm = _llm.with_structured_output(RAGDepartmentAnalysis)
     
     try:
-        response = llm.invoke(messages)
-        response_text = response.content.strip()
+        result: RAGDepartmentAnalysis = structured_llm.invoke(system_prompt)
+        return result
         
-        # JSON 파싱 시도
-        try:
-            result = json.loads(response_text)
-            return result
-        except json.JSONDecodeError:
-            # JSON 파싱 실패시 텍스트에서 추출
-            if "rag" in response_text:
-                return {"route": "rag"}
-            else:
-                # 부서명 추출 시도
-                for dept in DEPARTMENTS.keys():
-                    if dept in response_text:
-                        return {"route": "department", "department": dept}
-                return {"route": "department", "department": "인사"}
-            
     except Exception as e:
         print(f"LLM 분류 오류: {e}")
         # 기본값: 인사팀 담당자 안내로 라우팅
