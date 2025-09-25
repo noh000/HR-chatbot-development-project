@@ -1,15 +1,8 @@
 from typing import Dict, List, Optional, TypedDict, Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
- 
-class RouterState(TypedDict):
-    """라우터 상태를 관리하는 클래스"""
-    question: str                           # 원본 질문
-    query: str                              # 정제된 질문 쿼리
-    is_hr_question: Literal["yes", "no"]    # 1차 라우터에서 전달받는 HR 여부
-    next_step: Literal["router2", "reject"] # 다음 노드 방향
-    is_rag: bool                            # True: RAG 처리, False: 담당자 안내
-    department: Optional[Dict[str, str]]    # {"name": "부서명", "email": "주소", "slack": "채널"}
+from state import State
+
 
 # 부서 정보 dict (이메일과 슬랙 채널)
 DEPARTMENTS = {
@@ -110,11 +103,11 @@ class SecondaryRouter:
             # 기본값: 인사팀 담당자 안내로 라우팅
             return {"route": "department", "department": "인사"}
 
-    def route_question(self, state: RouterState) -> RouterState:
+    def route_question(self, state: State) -> State:
         """
         LLM 기반 질문 분류 및 라우팅
         """
-        question = state['good_question']
+        question = state['refined_question']
         
         print(f" LLM 기반 질문 분류 시작...")
         
@@ -127,22 +120,25 @@ class SecondaryRouter:
         print(f" 분류 결과: {classification_result}")
         
         if route == "rag":
-            state['is_rag'] = True 
-            state['department'] = None
+            # RAG 처리로 분류
+            state['is_rag_suitable'] = True 
+            state['department_info'] = None
+            state['answer_type'] = "rag_answer"  # RAG 처리 상태
             print("➡️ RAG 시스템으로 라우팅")
         else:
-            # 담당자 안내
-            state['is_rag'] = False 
-            state['department'] = DEPARTMENTS.get(department, DEPARTMENTS["인사"])
+            # 담당자 안내로 분류
+            state['is_rag_suitable'] = False 
+            state['department_info'] = DEPARTMENTS.get(department, DEPARTMENTS["인사"])
+            state['answer_type'] = "department_contact"
             print(f"➡️ {department}팀 담당자 안내로 라우팅")
         
         return state
 
-    def generate_department_response(self, state: RouterState) -> str:
+    def generate_department_response(self, state: State) -> str:
         """
         담당자 안내 응답 생성
         """
-        department = state.get('department') 
+        department = state.get('department_info') 
 
         if not department:
             return "해당 문의사항은 인사팀으로 문의하시면 정확하고 빠른 답변을 받으실 수 있습니다.\n\n(hr@gaida.play.com / #ask-hr)\n\n추가 질문이 있으시면 언제든 말씀해 주세요! 😊"
@@ -158,76 +154,21 @@ class SecondaryRouter:
         
         return response.strip()
 
-    def should_use_rag(self, state: RouterState) -> bool:
+    def should_use_rag(self, state: State) -> bool:
         """
         RAG 사용 여부 판단
         """
-        return state.get('is_rag', False) 
+        return state.get('is_rag_suitable', False) 
 
-
-
-# 테스트 코드
-def test_secondary_router():
-    """2차 라우터 테스트"""
-    
-    # LLM 모델 초기화
-    try:
-        llm = ChatOpenAI(model='gpt-4o', temperature=0)
-        router = SecondaryRouter(llm)
-    except:
-        print("⚠️ LLM 모델 초기화 실패. API 키를 확인해주세요.")
-        return
-    
-    # 테스트 케이스들
-    test_cases = [
-        # RAG 처리 예상 질문들
-        "연차 규정이 어떻게 되나요?",
-        "재택근무 정책을 알려주세요",
-        "복지제도에는 뭐가 있나요?",
-        "근무시간은 어떻게 되나요?",
-        "휴가 신청 방법을 알려주세요",
-        "다태아의 경우 출산 휴가 규정이 어떻게 되나요?",
+    def process_secondary_routing(self, state: State) -> State:
+        """
+        2차 라우터 전체 처리 프로세스
+        """
+        # 1. 질문 분류 및 라우팅
+        state = self.route_question(state)
         
-        # 담당자 안내 예상 질문들  
-        "이번 달 급여명세서를 확인하고 싶어요",  # 재무
-        "노트북이 고장났는데 교체해주세요",     # 인프라
-        "출장비 정산을 신청하고 싶습니다",       # 총무
-        "보안 사고가 발생했어요",              # 보안
-        "인사평가 결과를 문의하고 싶습니다",     # 인사
-        "회계처리 관련 문의가 있습니다",        # 재무
-        "사무용품을 주문하고 싶어요",           # 총무
-        "VPN 접속이 안 돼요",                # 인프라
-        "비밀번호가 유출된 것 같아요"           # 보안
-    ]
-    
-    print("=" * 80)
-    print("🤖 HR 챗봇 2차 라우터 테스트 (LLM 기반 분류)")
-    print("=" * 80)
-    
-    for i, question in enumerate(test_cases, 1):
-        print(f"\n[테스트 {i}] 질문: {question}")
-        print("-" * 60)
-        
-        # 상태 초기화
-        state = RouterState(
-            question=question,
-            query=question, # 정제된 질문
-            is_hr_question="yes",  # 1차 라우터에서 HR 질문으로 판정
-            is_rag=False,
-            department=None
-        )
-        
-        # 라우팅 실행
-        result_state = router.route_question(state)
-        
-        if result_state['is_rag']: 
-            print("📚 ➡️ RAG 시스템으로 전달")
-        else:
-            print(f"🏢 ➡️ {result_state['department']['name']}팀 담당자 안내") 
+        # 2. 담당자 안내인 경우 최종 답변 생성
+        if state['answer_type'] == "department_contact":
+            state['final_answer'] = self.generate_department_response(state)
             
-            # 담당자 안내 응답 생성
-            response = router.generate_department_response(result_state)
-            print(f"💬 응답:\n{response}")
-
-if __name__ == "__main__":
-    test_secondary_router()
+        return state
