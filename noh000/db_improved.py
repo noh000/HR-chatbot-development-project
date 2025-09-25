@@ -19,7 +19,7 @@ from langchain_core.documents import Document
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-DOCS_DIRECTORY = "."
+DOCS_DIRECTORY = "."  # db.py가 있는 폴더와 다른 위치에 문서가 있다면 변경
 HR_DOCUMENT_FILES = [
     "04_복지정책_v1.0.md"
 ]
@@ -102,11 +102,12 @@ def _load_and_split_docs(file_paths: List[str]) -> List[Document]:
         ("###", "sub_category"),
     ]
     markdown_splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=headers_to_split_on, strip_headers=False
+        headers_to_split_on=headers_to_split_on, strip_headers=False  # 헤더 정보 유지 (컨텍스트에 중요)
     )
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
+        separators=["\n\n", "\n", ". ", "? ", "! ", " ", ""]
     )
 
     for file_path in file_paths:
@@ -184,3 +185,27 @@ def get_vectorstore(
     with _VSTORE_LOCK:
         _VSTORE_CACHE[index_name] = vectorstore
     return vectorstore
+
+if __name__ == "__main__":
+    # 스크립트를 직접 실행할 때 벡터 저장소를 생성하고 문서를 업로드합니다.
+    # recreate=True로 설정하면 실행 시마다 기존 문서를 모두 지우고 새로 업로드합니다.
+    logging.info("스크립트를 직접 실행하여 Pinecone 벡터 저장소 설정을 시작합니다.")
+    
+    # 처음 생성하거나, 강제로 문서를 다시 업로드하고 싶을 때 recreate=True
+    vectorstore = get_vectorstore(recreate=False) 
+    
+    if vectorstore:
+        logging.info("벡터 저장소 설정이 성공적으로 완료되었습니다.")
+        # 간단한 테스트 검색을 통해 retriever가 정상 동작하는지 확인
+        try:
+            retriever = vectorstore.as_retriever()
+            test_query = "연차 휴가"
+            retrieved_docs = retriever.invoke(test_query)
+            if retrieved_docs:
+                logging.info(f"테스트 쿼리 '{test_query}'에 대한 검색 성공: {len(retrieved_docs)}개 문서 반환.")
+            else:
+                logging.warning(f"테스트 쿼리 '{test_query}'에 대한 검색 결과가 없습니다. 인덱스는 생성되었으나 문서가 비어있을 수 있습니다.")
+        except Exception as e:
+            logging.error(f"테스트 검색 중 오류 발생: {e}")
+    else:
+        logging.error("벡터 저장소 설정에 실패했습니다.")
