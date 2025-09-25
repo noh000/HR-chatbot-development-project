@@ -41,7 +41,6 @@ def hr_router(state: State) -> str:
 
     # 라우팅 방향만 반환
     return "router2" if result["is_hr_question"] else "reject" # ture -> router2 / false -> reject
-
 # =========================
 # 3. Reject Node
 # =========================
