@@ -27,11 +27,29 @@ def hr_router(state: State) -> State:
     HR 여부만 판별, 그 결과를 상태에 저장
     """
     prompt = f"""
-
-    질문: "{state['refined_question']}"
-
     당신은 "가이다 플레이 스튜디오(GPS)"의 HR 정책 안내 챗봇입니다.
-    아래 질문이 HR(인사/근무/휴가/복지/장비·보안/출장·비용처리 등) 관련인지 판별하세요.
+    정제 질문이 HR 관련인지 판별하세요.
+
+    정제 질문: "{state['refined_question']}"
+
+    # 분류 기준
+    ## HR과 관련 없는 경우
+    - 개인정보 (예: 주민등록번호, 이름)
+    - 회사 내부 보안 내용 (예: 회사 재정 상황, 신규 프로젝트, 회사의 중요한 내부 문건)
+    - 복잡한 급여·퇴직금 계산 요청
+    - 법률 자문 요청이나 법률 상담 톤의 질문
+
+    ## HR과 관련 있는 경우
+    - HR(인사/근무/휴가/복지/장비·보안/출장·비용처리 등)
+
+    # 응답 형식
+    다음 JSON 형식으로만 응답해주세요:
+
+    HR과 관련없는 경우:
+    {{"is_hr_question": false}}
+
+    HR과 관련있는 경우:
+    {{"is_hr_question": true}}
     """
     _llm = ChatOpenAI(model="gpt-4.1-nano", temperature=0)
     structured_llm = _llm.with_structured_output(HRAnalysis)
