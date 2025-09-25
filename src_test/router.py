@@ -3,7 +3,7 @@
 import json
 from typing import Dict, List, Optional, TypedDict, Literal, cast
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from state import State
 from llm import get_llm
 
@@ -73,7 +73,11 @@ def route_after_hr(state: State) -> str:
 def reject_node(state: State):
     """HR 관련이 아닌 질문에 대한 거부 메시지"""
     # return "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."
-    return {"final_answer": "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."}
+    reject_answer = "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."
+    return {
+        "messages": [AIMessage(content=reject_answer)],
+        "final_answer": reject_answer
+    }
 
 # =========================
 # 2차 라우터: RAG vs Department
