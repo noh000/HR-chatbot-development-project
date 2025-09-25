@@ -35,7 +35,7 @@ def _get_question(state: State) -> str:
     return ""
 
 # 1) 검색 쿼리 정제
-def refine_query(state: State) -> dict:
+def analyze_query(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
 

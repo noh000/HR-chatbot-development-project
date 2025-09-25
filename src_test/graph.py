@@ -3,7 +3,7 @@
 # ========== 임포트 ==========
 from langgraph.graph import StateGraph, START, END
 from state import State
-from nodes import refine_query, retrieve, rerank, generate_answer, verify_answer, department_node
+from nodes import analyze_query, retrieve, rerank, generate_answer, verify_answer, department_node
 from router import hr_router, route_after_hr, reject_node, route_after_router2, router2_node
 
 
@@ -11,12 +11,12 @@ from router import hr_router, route_after_hr, reject_node, route_after_router2, 
 builder = StateGraph(State)
 
 # ========== 노드 등록(흐름 순서) ==========
-# 흐름: START -> refine_query -> hr_node -> (router2 | reject)
+# 흐름: START -> analyze_query -> hr_node -> (router2 | reject)
 # 흐름: router2 -> (retrieve | department)
 # 흐름: retrieve -> rerank -> generate_answer -> verify_answer -> END
 
 # 사전 쿼리 분석
-builder.add_node("refine_query", refine_query)
+builder.add_node("analyze_query", analyze_query)
 
 # 1차 라우터
 builder.add_node("hr_router", hr_router)
@@ -34,8 +34,8 @@ builder.add_node("verify_answer", verify_answer)
 
 # ========== 엣지(흐름 순서) ==========
 # 시작과 쿼리 분석
-builder.add_edge(START, "refine_query")
-builder.add_edge("refine_query", "hr_router")
+builder.add_edge(START, "analyze_query")
+builder.add_edge("analyze_query", "hr_router")
 
 # 1차 라우터: HR이면 router2, 아니면 reject
 builder.add_conditional_edges(
