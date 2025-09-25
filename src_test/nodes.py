@@ -78,11 +78,19 @@ def analyze_query(state: State) -> dict:
 
 # 2) 문서 검색
 def retrieve(state: State) -> dict:
-    vs = get_vectorstore(index_name="gaida-company-rules", file_path="04_복지정책_v1.0.md")
+    # 미리 생성된 Pinecone 인덱스에 연결하여 retriever를 생성합니다.
+    # db.py의 get_vectorstore 함수를 사용하여 기존 인덱스를 가져옵니다.
+    vs = get_vectorstore(index_name="gaida-hr-rules")
+    
     refined_question = state.get("refined_question", "") or _get_question(state) or ""
     if not refined_question:
+        # 질문이 없으면 빈 리스트를 반환합니다.
         return {"retrieved_docs": []}
-    docs = vs.similarity_search(refined_question, k=5)
+        
+    # retriever를 사용하여 유사도 높은 문서를 3개 검색합니다.
+    retriever = vs.as_retriever(search_kwargs={"k": 3})
+    docs = retriever.invoke(refined_question)
+    
     return {"retrieved_docs": docs}
 
 # 3) 재순위화(정규식 기반 파싱 유지)
