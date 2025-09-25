@@ -5,9 +5,10 @@ load_dotenv()
 
 from typing import List, Tuple
 from langchain_core.documents import Document
+from langchain_core.messages import AIMessage
 from state import State
 from llm import get_llm
-from db import get_vectorstore  # 필요하면 get_retriever로 교체 가능
+from db import get_vectorstore
 
 # messages/state에서 사용자 질문을 안전하게 추출
 def _get_question(state: State) -> str:
@@ -74,7 +75,11 @@ def analyze_query(state: State) -> dict:
     """.strip()
 
     result = llm.invoke(prompt).content.strip() if question else ""
-    return {"refined_question": result}
+    return {
+        "user_question": question,
+        "refined_question": result
+    }
+
 
 # 2) 문서 검색
 def retrieve(state: State) -> dict:
@@ -146,7 +151,10 @@ def generate_answer(state: State) -> dict:
     """.strip()
 
     answer = llm.invoke(prompt).content.strip()
-    return {"final_answer": answer}
+    return {
+        "messages": [AIMessage(content=answer)],
+        "final_answer": answer
+    }
 
 # 5) 답변 검증
 def verify_answer(state: State) -> dict:
@@ -181,4 +189,7 @@ def department_node(state: State) -> dict:
 추가 질문이 있으시면 언제든 말씀해 주세요! 😊
     """.strip()
     
-    return {"final_answer": response}
+    return {
+        "messages": [AIMessage(content=response)],
+        "final_answer": response
+    }
