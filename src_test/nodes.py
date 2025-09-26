@@ -36,7 +36,7 @@ def _get_question(state: State) -> str:
     return ""
 
 # 1) 사용자 질문 정제
-def analyze_query(state: State) -> dict:
+def refine_question(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
 
@@ -129,7 +129,7 @@ def rerank(state: State) -> dict:
     return {"retrieved_docs": top_docs}
 
 # 4) 답변 생성
-def generate_answer(state: State) -> dict:
+def generate_rag_answer(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
     if not question:
@@ -165,7 +165,7 @@ def generate_answer(state: State) -> dict:
     }
 
 # 5) 답변 검증
-def verify_answer(state: State) -> dict:
+def verify_rag_answer(state: State) -> dict:
     llm = get_llm("gen")
 
     # [수정] 검증을 위해 문서의 '이름'이 아닌 '내용'을 컨텍스트로 구성합니다.
@@ -203,7 +203,7 @@ def verify_answer(state: State) -> dict:
     return {"verification": final_verdict}
 
 # 6) 담당자 안내 답변 생성
-def department_node(state: State) -> dict:
+def generate_contact_answer(state: State) -> dict:
     """
     담당자 안내 응답 생성
     """
