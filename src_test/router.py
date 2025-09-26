@@ -28,8 +28,9 @@ def update_hr_status(state: State) -> State:
     """
     prompt = f"""
     당신은 "가이다 플레이 스튜디오(GPS)"의 HR 정책 안내 챗봇입니다.
-    정제 질문이 HR 관련인지 판별하세요.
+    원본 질문을 참고해서 정제 질문이 HR 관련인지 판별하세요.
 
+    원본 질문: "{state['user_question']}"
     정제 질문: "{state['refined_question']}"
 
     # 분류 기준
