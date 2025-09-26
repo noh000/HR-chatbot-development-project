@@ -90,7 +90,7 @@ def _classify_rag_or_department(question: str) -> Dict[str, str]:
     """LLM을 사용한 통합 분류: RAG vs 담당자 안내 + 부서 결정"""
     llm = get_llm("router")
     system_prompt = f"""
-    당신은 사내(gaida play studio) HR 챗봇의 질문 분류 전문가입니다.
+    당신은 "가이다 플레이 스튜디오(GPS)" HR 챗봇의 질문 분류 전문가입니다.
     정제된 질문을 분석하여 어떻게 처리할지 결정해주세요.
 
     정제된 질문: "{question}"
