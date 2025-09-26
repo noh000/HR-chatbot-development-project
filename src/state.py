@@ -21,6 +21,9 @@ class State(MessagesState, total=False):
     
     # === RAG 처리 ===
     retrieved_docs: List[Document]              # 벡터DB에서 검색된 관련 문서들 (Top-K)
+
+    # === 답변 검증 ===
+    verification: str                           # 답변 품질 검증 결과
         
     # === 최종 답변 통합 관리 ===
     answer_type: Literal[                       # 답변 유형 구분
@@ -44,4 +47,3 @@ class State(MessagesState, total=False):
     # === MVP 개발 후 고려 ===
     # category: str                           # 전처리 노드에서 분류된 카테고리
     # reranked_docs: List[Document]           # 검색 후 재순위화된 Document 리스트
-    # verification: str                       # 답변 품질 검증 결과
