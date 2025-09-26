@@ -22,7 +22,7 @@ DEPARTMENTS = {
 class HRAnalysis(TypedDict):
     is_hr_question: bool
 
-def hr_router(state: State) -> State:
+def update_hr_status(state: State) -> State:
     """
     HR 여부만 판별, 그 결과를 상태에 저장
     """
@@ -71,7 +71,7 @@ def route_after_hr(state: State) -> str:
 # =========================
 # Answer_type: Reject
 # =========================
-def reject_node(state: State):
+def generate_reject_answer(state: State):
     """HR 관련이 아닌 질문에 대한 거부 메시지"""
     # return "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."
     reject_answer = "입력하신 질문은 HR 관련 문의가 아닙니다. HR 관련 질문만 가능합니다."
@@ -148,7 +148,7 @@ def _classify_rag_or_department(question: str) -> Dict[str, str]:
         # 기본값: 인사팀 담당자 안내로 라우팅
         return {"route": "department", "department": "인사"}
 
-def router2_node(state: State) -> State:
+def update_rag_status(state: State) -> State:
     """LLM 기반 질문 분류 및 라우팅 상태 업데이트"""
     question = state['refined_question']
     
@@ -172,7 +172,7 @@ def router2_node(state: State) -> State:
         print(f"➡️ {department_name}팀 담당자 안내로 라우팅")
         return cast(State, {**state, "is_rag_suitable": False, "department_info": department_info, "answer_type": "department_contact"})
 
-def route_after_router2(state: State) -> Literal["rag", "department"]:
+def route_after_rag(state: State) -> Literal["rag", "department"]:
     """RAG 사용 여부에 따라 다음 노드 결정"""
     if state.get('is_rag_suitable'):
         return "rag"

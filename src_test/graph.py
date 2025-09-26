@@ -3,79 +3,63 @@
 # ========== 임포트 ==========
 from langgraph.graph import StateGraph, START, END
 from state import State
-from nodes import analyze_query, retrieve, rerank, generate_answer, verify_answer, department_node
-from router import hr_router, route_after_hr, reject_node, route_after_router2, router2_node
+from nodes import refine_question, retrieve, rerank, generate_rag_answer, verify_rag_answer, generate_contact_answer
+from router import update_hr_status, route_after_hr, generate_reject_answer, route_after_rag, update_rag_status
 
 
 # ========== 그래프 빌더 ==========
 builder = StateGraph(State)
 
 # ========== 노드 등록(흐름 순서) ==========
-# 흐름: START -> analyze_query -> hr_node -> (router2 | reject)
+# 흐름: START -> refine_question -> hr_node -> (router2 | reject)
 # 흐름: router2 -> (retrieve | department)
-# 흐름: retrieve -> rerank -> generate_answer -> verify_answer -> END
+# 흐름: retrieve -> rerank -> generate_rag_answer -> verify_rag_answer -> END
 
 # 사전 쿼리 분석
-builder.add_node("analyze_query", analyze_query)
+builder.add_node("refine_question", refine_question)
 
 # 1차 라우터
-builder.add_node("hr_router", hr_router)
-builder.add_node("reject", reject_node)  # 터미널
+builder.add_node("update_hr_status", update_hr_status)
+builder.add_node("generate_reject_answer", generate_reject_answer)  # 터미널
 
 # 2차 라우터 및 담당자 안내
-builder.add_node("router2", router2_node)
-builder.add_node("department", department_node)  # 터미널
+builder.add_node("update_rag_status", update_rag_status)
+builder.add_node("generate_contact_answer", generate_contact_answer)  # 터미널
 
 # RAG 파이프라인
 builder.add_node("retrieve", retrieve)
 builder.add_node("rerank", rerank)
-builder.add_node("generate_answer", generate_answer)
-builder.add_node("verify_answer", verify_answer)
+builder.add_node("generate_rag_answer", generate_rag_answer)
+builder.add_node("verify_rag_answer", verify_rag_answer)
 
 # ========== 엣지(흐름 순서) ==========
 # 시작과 쿼리 분석
-builder.add_edge(START, "analyze_query")
-builder.add_edge("analyze_query", "hr_router")
+builder.add_edge(START, "refine_question")
+builder.add_edge("refine_question", "update_hr_status")
 
 # 1차 라우터: HR이면 router2, 아니면 reject
 builder.add_conditional_edges(
-    "hr_router",
+    "update_hr_status",
     route_after_hr,
-    {"router2": "router2", "reject": "reject"},
+    {"router2": "update_rag_status", "reject": "generate_reject_answer"},
 )
 
 # 2차 라우터: rag는 retrieve(검색), department는 터미널
 builder.add_conditional_edges(
-    "router2",
-    route_after_router2,
-    {"rag": "retrieve", "department": "department"},
+    "update_rag_status",
+    route_after_rag,
+    {"rag": "retrieve", "department": "generate_contact_answer"},
 )
 
 # RAG 파이프라인
 builder.add_edge("retrieve", "rerank")
-builder.add_edge("rerank", "generate_answer")
-builder.add_edge("generate_answer", "verify_answer")
-builder.add_edge("verify_answer", END)
+builder.add_edge("rerank", "generate_rag_answer")
+builder.add_edge("generate_rag_answer", "verify_rag_answer")
+builder.add_edge("verify_rag_answer", END)
 
 # 터미널 경로
-builder.add_edge("department", END)
-builder.add_edge("reject", END)
+builder.add_edge("generate_contact_answer", END)
+builder.add_edge("generate_reject_answer", END)
 
 # ========== 공개 그래프 ==========
 graph = builder.compile()
-
-# ========== 로컬 테스트 진입점(선택) ==========
-if __name__ == "__main__":
-    from langgraph.checkpoint.memory import InMemorySaver
-
-    demo_graph = builder.compile(checkpointer=InMemorySaver())
-
-    init_state: State = {
-        "messages": [],
-        "question": "연차휴가는 언제까지 사용해야 하나요?",
-        # "category": "연차휴가",
-    }
-    config = {"configurable": {"thread_id": "demo-thread-1"}}
-    out_state = demo_graph.invoke(init_state, config=config)
-    print("최종 답변:\n", out_state.get("result", ""))
-    print("검증 결과:\n", out_state.get("verification", ""))
