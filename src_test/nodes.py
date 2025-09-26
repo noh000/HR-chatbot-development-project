@@ -34,7 +34,7 @@ def _get_question(state: State) -> str:
 
     return ""
 
-# 1) 검색 쿼리 정제
+# 1) 사용자 질문 정제
 def analyze_query(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
@@ -128,21 +128,29 @@ def generate_answer(state: State) -> dict:
     llm = get_llm("gen")
     question = _get_question(state)
     if not question:
-        return {"final_answer": "문서에 근거가 없어 확답하기 어렵습니다. 질문을 제공해 주세요."}
+        return {"final_answer": "문서에 근거가 없어 답변드리기 어렵습니다. 다시 질문해주세요."}
 
     context = ""
     for i, doc in enumerate(state.get("retrieved_docs", []), start=1):
         context += f"[{i}] ({doc.metadata.get('source', 'unknown')})\n{doc.page_content}\n\n"
 
     if not context.strip():
-        return {"final_answer": "문서에 근거가 없어 확답하기 어렵습니다. 관련 출처가 검색되지 않았습니다."}
+        return {"final_answer": "문서에 근거가 없어 답변드리기 어렵습니다. 관련 출처가 검색되지 않았습니다."}
 
     prompt = f"""
-    아래 출처 문서만 근거로 질문에 답하세요. 문서에 명시가 없으면 "문서에 근거가 없어 확답하기 어렵습니다."라고 답하세요.
-    본문 중 인용한 부분 뒤에 [출처 번호]를 붙이고, 답변 마지막에 출처 목록을 정리해주세요.
-    질문: "{question}"
+    당신은 "가이다 플레이 스튜디오(GPS)"의 친절한 HR 정책 안내 챗봇입니다.
+    아래 출처 문서 내용만을 근거로 해서 질문에 대해 명확하고 간결하게 답변하세요.
+    문서에 명시된 내용이 없으면 "문서에 근거가 없어 답변드리기 어렵습니다."라고 답해야 합니다.
+    답변 본문 중 인용한 부분이 있다면, 문장 끝에 [출처 번호]를 붙여주세요.
+    답변의 마지막에는 '출처 목록'을 정리해서 보여주세요.
+
+    # 질문
+    {question}
+
+    # 출처 문서
     {context}
-    답변:
+
+    # 답변
     """.strip()
 
     answer = llm.invoke(prompt).content.strip()
@@ -151,15 +159,40 @@ def generate_answer(state: State) -> dict:
 # 5) 답변 검증
 def verify_answer(state: State) -> dict:
     llm = get_llm("gen")
-    sources = ", ".join(doc.metadata.get("source", "unknown") for doc in state.get("retrieved_docs", []))
+
+    # [수정] 검증을 위해 문서의 '이름'이 아닌 '내용'을 컨텍스트로 구성합니다.
+    context = ""
+    for doc in state.get("retrieved_docs", []):
+        context += f"- {doc.page_content}\n"
+
+    final_answer = state.get("final_answer", "")
+
+    # [추가] 컨텍스트나 답변이 없으면 검증이 무의미하므로 '불일치함'으로 처리합니다.
+    if not context.strip() or not final_answer.strip():
+        return {"verification": "불일치함"}
+
     prompt = f"""
-    아래 답변이 출처들[{sources}]의 내용과 일치하는지 '일치함' 또는 '불일치함'만 답하세요.
-    답변: "{state.get("final_answer", "")}"
-    판단:
+    당신은 생성된 답변이 주어진 문서 내용에만 근거했는지 검증하는 AI 평가자입니다.
+    '답변'이 아래 '문서' 내용과 완전히 일치하는 경우에만 '일치함'을, 조금이라도 다르거나 관련 없는 내용이 있다면 '불일치함'을 출력하세요.
+    다른 어떤 설명도 추가하지 말고, '일치함' 또는 '불일치함' 두 단어 중 하나로만 답변해야 합니다.
+
+    # 문서
+    {context}
+
+    # 답변
+    "{final_answer}"
+
+    # 판단 (일치함/불일치함):
     """.strip()
+
     verdict = llm.invoke(prompt).content.strip()
-    verdict = "일치함" if verdict.startswith("일치") else ("불일치함" if verdict.startswith("불일치") else "불일치함")
-    return {"verification": verdict}
+
+    # [개선] LLM이 지시를 어기고 "네, 일치합니다."와 같이 답변해도 처리 가능
+    if "일치함" in verdict:
+        final_verdict = "일치함"
+    else:
+        final_verdict = "불일치함"
+    return {"verification": final_verdict}
 
 # 6) 담당자 안내 답변 생성
 def department_node(state: State) -> dict:
